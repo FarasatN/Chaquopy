@@ -2,11 +2,28 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     id("com.chaquo.python") version "14.0.2" apply false
-
-
 }
 
-//android {
+// Removed the allprojects block entirely:
+// allprojects {
+//     repositories {
+//         google() // REMOVE THIS
+//         mavenCentral() // REMOVE THIS
+//         jcenter()    // REMOVE THIS
+//     }
+// }
+
+
+//dependencyResolutionManagement {
+//    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+//    repositories {
+//        google() // Keep google here in dependencyResolutionManagement in settings.gradle or settings.gradle.kts
+//        mavenCentral() // Keep mavenCentral here in dependencyResolutionManagement in settings.gradle or settings.gradle.kts
+//        jcenter() // Keep jcenter here in dependencyResolutionManagement in settings.gradle or settings.gradle.kts (if needed)
+//    }
+//}
+
+//android {  <-- These blocks are also commented out in your provided code, keep them commented or remove if not needed.
 //    flavorDimensions "pyVersion"
 //    productFlavors {
 //        create("py310") { dimension = "pyVersion" }

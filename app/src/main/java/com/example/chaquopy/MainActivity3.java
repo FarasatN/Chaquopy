@@ -21,7 +21,7 @@ import com.chaquo.python.android.AndroidPlatform;
 
 import java.util.concurrent.TimeUnit;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity3 extends AppCompatActivity {
     private FilePermissionHelper permissionHelper;
     private static final String TAG = "MainActivity";
 
@@ -87,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
             return Result.success(); // Indicate success regardless of network type. Handle failures in Python code and logs.
         }
 
-        private Result executePythonMain() {
+        private void executePythonMain() {
             if (!Python.isStarted()) {
                 Python.start(new AndroidPlatform(getApplicationContext()));
             }
@@ -96,94 +96,11 @@ public class MainActivity extends AppCompatActivity {
                 PyObject myModule = py.getModule("app");
                 myModule.callAttr("main"); // Call the main function in your Python script
                 Log.d(WORKER_TAG, "WorkManager - Python main function executed successfully");
-                return Result.success();
             } catch (Exception e) {
                 Log.e(WORKER_TAG, "WorkManager - Error executing Python main function: ", e);
                 // In a real app, consider more robust error handling and potentially returning Result.failure()
                 // from doWork() if Python execution is critical for the worker's success.
-                return Result.failure();
             }
         }
     }
 }
-
-
-
-
-//======================================================================================
-//package com.example.chaquopy;
-//
-//import android.content.Intent;
-//import android.os.Bundle;
-//import android.util.Log;
-//
-//import androidx.annotation.Nullable;
-//import androidx.appcompat.app.AppCompatActivity;
-//
-//import com.chaquo.python.PyObject;
-//import com.chaquo.python.Python;
-//import com.chaquo.python.android.AndroidPlatform;
-//
-//
-//public class MainActivity extends AppCompatActivity {
-//    private FilePermissionHelper permissionHelper;
-//    private static final String TAG = "MainActivity";
-//    @Override
-//    protected void onCreate(Bundle savedInstanceState) {
-//        super.onCreate(savedInstanceState);
-//        setContentView(R.layout.activity_main);
-//
-//        permissionHelper = new FilePermissionHelper(this);
-//        permissionHelper.requestDownloadFolderAccess();
-//        String networkType = NetworkUtil.getNetworkType(this);
-//        Log.d(TAG, "Current Network Type: " + networkType);
-//
-//        if ("WIFI".equals(networkType)) {
-//            Log.v(TAG, "Connected via Wi-Fi");
-//            System.out.println("Connected via Wi-Fi");
-//            // Perform Wi-Fi specific actions
-//            //python code here
-//            // "context" must be an Activity, Service or Application object from your app.
-//            if (!Python.isStarted()) {
-//                Python.start(new AndroidPlatform(getApplicationContext()));
-//            }
-//            new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    // Call your Python function here via Chaquopy.
-//                    Python py = Python.getInstance();
-//                    PyObject myModule = py.getModule("app");
-//                    myModule.callAttr("main");
-//                    // If you need to update the UI with the result, post to the main thread.
-//                    runOnUiThread(() -> {
-//                        // Update UI here
-//                        setContentView(R.layout.activity_main);
-//                    });
-//                }
-//            }).start();
-//
-//        } else if ("MOBILE".equals(networkType)) {
-//            Log.v(TAG, "Connected via Mobile Data");
-//            System.out.println("Connected via Mobile Data");
-//            // Perform Mobile data specific action
-//        } else if ("OTHER".equals(networkType)) {
-//            Log.v(TAG, "Connected via Other Network Type");
-//            System.out.println("Connected via Other Network Type");
-//            // Handle other network types if needed
-//        } else if ("NO_NETWORK".equals(networkType)) {
-//            Log.v(TAG, "No Network Connection");
-//            System.out.println("No Network Connection");
-//            // Handle no network connection scenario (e.g., show error message, disable network-dependent features)
-//        }
-//
-//    }
-//
-//    @Override
-//    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-//        super.onActivityResult(requestCode, resultCode, data);
-//        permissionHelper.handlePermissionResult(requestCode);
-//    }
-//
-//
-//
-//}

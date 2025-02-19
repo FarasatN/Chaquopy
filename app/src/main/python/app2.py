@@ -236,7 +236,7 @@ def process_files():
 
         if not all_files:
             logging.info("No files found in %s, skipping processing", LOCAL_FOLDER)
-            return 0
+            return
 
         logging.info("Found %d files in %s", len(all_files), LOCAL_FOLDER)
 
@@ -277,7 +277,7 @@ def main():
     if get_network_type()!=None:
         configure_logging()
 
-        job_interval = 30  # seconds
+        job_interval = 10  # seconds
         schedule.every(job_interval).seconds.do(process_files)
         logging.info("Scheduled job configured to run every %d seconds", job_interval)
 
@@ -285,19 +285,14 @@ def main():
         while True:
             try:
                 if get_network_type()!=None:
-                    if process_files() != 0:
-                        is_log_file_exist()
-                        pending = schedule.get_jobs()
-                        logging.debug("Pending jobs check: %d jobs in queue", len(pending))
-                        schedule.run_pending()
-                    else:
-                        logging.info("file not found")
-                        print("file not found")
-                        break
+                    is_log_file_exist()
+                    pending = schedule.get_jobs()
+                    logging.debug("Pending jobs check: %d jobs in queue", len(pending))
+                    schedule.run_pending()
             except Exception as e:
                 logging.error("Scheduler error: %s", str(e))
 
-            sleep_time = 12
+            sleep_time = 5
             is_log_file_exist()
             logging.debug("Sleeping for %d seconds", sleep_time)
             time.sleep(sleep_time)
