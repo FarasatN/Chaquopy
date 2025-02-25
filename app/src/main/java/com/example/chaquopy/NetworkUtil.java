@@ -1,14 +1,17 @@
 package com.example.chaquopy;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Build;
+import android.util.Log;
 
-public class NetworkUtil {
-
+public class NetworkUtil extends BroadcastReceiver {
+    private static final String TAG = "WifiStatusReceiver";
     public static String getNetworkType(Context context) {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) {
@@ -52,6 +55,16 @@ public class NetworkUtil {
                 }
             }
             return "NO_NETWORK";
+        }
+    }
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String networkType = getNetworkType(context.getApplicationContext());
+        if (!"WIFI".equals(networkType)) {
+            Log.v(TAG, "Wi-Fi is disabled or not connected.");
+        } else {
+            Log.v(TAG, "Wi-Fi is connected.");
         }
     }
 }

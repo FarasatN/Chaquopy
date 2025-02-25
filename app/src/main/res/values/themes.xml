@@ -3,7 +3,8 @@
     <style name="Base.Theme.Chaquopy" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
-
-    <style name="Theme.Chaquopy" parent="Base.Theme.Chaquopy" />
+    <style name="Theme.Chaquopy" parent="Base.Theme.Chaquopy">
+        <item name="android:windowTranslucentStatus">true</item> </style>
 </resources>

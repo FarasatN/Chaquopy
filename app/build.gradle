@@ -13,7 +13,7 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
+        resConfigs "en" // Keep only English resources
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // On Apple silicon, you can omit x86_64.
@@ -30,12 +30,26 @@ android {
         }
         python {
             pip {
-                install "schedule==1.2"
-                install "google-auth==2.22.0"
-                install "google-auth-oauthlib==0.7.0"
-                install "google-auth-httplib2==0.1.0"
-                install "google-api-python-client==2.70.0"
-                install "requests==2.28.2"
+//                install "schedule==1.2"
+//                install "google-auth==2.22.0"
+//                install "google-auth-oauthlib==0.7.0"
+//                install "google-auth-httplib2==0.1.0"
+//                install "google-api-python-client==2.70.0"
+
+//                install "google-api-python-client>=2.0.0"
+//                install "google-auth>=2.3.0"
+//                install "google-auth-httplib2>=0.1.0"
+//                install 'google-api-python-client'
+                install 'google-api-python-client>=2.12.0' //# Example: Version 2.12.0 or a later version
+
+                install 'google-auth-httplib2'
+                install 'google-auth-oauthlib'
+                install 'schedule'
+                install 'requests'
+//                install 'logging'
+//                install 'hashlib'// # Make sure hashlib is included if you use it explicitly (it's usually built-in, but good to be explicit)
+//                install 'statistics' //# Make sure statistics is included if used explicitly
+
             }
         }
 
@@ -49,7 +63,9 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+//            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -65,11 +81,13 @@ dependencies {
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity
-    implementation libs.constraintlayout
-    testImplementation libs.junit
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.espresso.core
+//    implementation libs.constraintlayout
+//    testImplementation libs.junit
+//    androidTestImplementation libs.ext.junit
+//    androidTestImplementation libs.espresso.core
 //    implementation "com.chaquo.python:gradle:14.0.2" // Latest version
+//    implementation 'com.google.apis:google-api-services-drive:v3-rev20240415-2.0.0'
+//    implementation 'com.google.auth:google-auth-library-oauth2-http:1.23.0'
 
     implementation "androidx.work:work-runtime:2.8.1"
 }

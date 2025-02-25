@@ -10,13 +10,42 @@
     android:layout_gravity="center"
     android:foregroundGravity="center">
         <TextView
-            android:id="@+id/output"
+            android:id="@+id/output1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:textSize="12sp"
+            android:layout_margin="2dp"
             android:textIsSelectable="true"
-            android:text="Your 'config.json' and 'service_account.json' files must be in here:
-             \n '/storage/emulated/0/Download/automate/'"
-            android:textColor="#ff0000"/>
+            android:gravity="start"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="14sp"
+            android:autoSizeMaxTextSize="32sp"
+            android:autoSizeStepGranularity="2sp"
+            android:textStyle="bold"
+            android:text=
+                "
+                \n This app automatically uploads files from your device to cloud drive account
+                 "
+            android:textColor="#009688"/>
+        <TextView
+            android:id="@+id/output2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:layout_margin="2dp"
+            android:textIsSelectable="true"
+            android:gravity="start"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="14sp"
+            android:autoSizeMaxTextSize="32sp"
+            android:autoSizeStepGranularity="2sp"
+            android:text=
+                "
+                \nYour 'config.json' and 'service_account.json' files must
+                \nbe in here: '/storage/emulated/0/Download/automate/'
+                \n\nThe default local folder is located in here that will be upload inside of it
+                \nto drive and then delete from device: '/storage/emulated/0/Ringtones/'
+                \n\n* The log file will also be located in this address:
+                \n'/storage/emulated/0/Download/automate/upload_log.txt'"
+            android:textColor="#009688"/>
 </LinearLayout>
