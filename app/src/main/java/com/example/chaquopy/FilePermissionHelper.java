@@ -12,7 +12,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 public class FilePermissionHelper {
-
+//
     private static final int STORAGE_PERMISSION_CODE = 100;
     private static final int MANAGE_STORAGE_CODE = 101;
     private final Activity activity;

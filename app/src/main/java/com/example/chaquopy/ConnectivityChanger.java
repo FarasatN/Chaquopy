@@ -11,7 +11,7 @@ import android.util.Log;
 
 
 public class ConnectivityChanger {
-
+//
     private static final String TAG = "ConnectivityChanger";
     private Context context;
     private ConnectivityChangeListener listener;

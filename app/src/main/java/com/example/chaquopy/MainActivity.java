@@ -40,6 +40,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity implements ConnectivityChanger.ConnectivityChangeListener {
+    //
     private FilePermissionHelper permissionHelper;
     private static final String TAG = "Auto Upload";
     private static final String channelId = "i.apps.notifications"; // Unique channel ID for notifications

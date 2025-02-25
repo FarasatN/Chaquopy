@@ -11,6 +11,7 @@ import android.os.Build;
 import android.util.Log;
 
 public class NetworkUtil extends BroadcastReceiver {
+    //
     private static final String TAG = "WifiStatusReceiver";
     public static String getNetworkType(Context context) {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
