@@ -1,56 +1,70 @@
 import os
 import time
-import schedule
-import logging
 import json
+import logging
+import hashlib
+import threading
+import requests  # For network speed measurement
+import tracemalloc
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import tracemalloc
+
 tracemalloc.start()
 #
-def load_config(config_path='/storage/emulated/0/Download/automate/config.json'):
-    """
-    Loads configuration settings from a JSON file.
-    The default path is 'config.json', but you can change it as needed.
-    """
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+# --------------------------
+# Configuration Management
+# --------------------------
+class ConfigManager:
+    _instance = None
+    _config = None
 
-# Load configuration
-config = load_config()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ConfigManager, cls).__new__(cls)
+            cls._instance.load_config()
+        return cls._instance
 
-# Extract configuration constants
+    def load_config(self, config_path='/storage/emulated/0/Download/automate/config.json'):
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        with open(config_path, 'r', encoding='utf-8') as f:
+            self._config = json.load(f)
+        # Optionally, validate required keys here.
+        return self._config
+
+    def get(self, key, default=None):
+        return self._config.get(key, default)
+
+config = ConfigManager()
 SCOPES = config.get('SCOPES')
 SERVICE_ACCOUNT_FILE = config.get('SERVICE_ACCOUNT_FILE')
 PARENT_FOLDER_ID = config.get('PARENT_FOLDER_ID')
 LOCAL_FOLDER = config.get('LOCAL_FOLDER')
 LOG_LOCATION = config.get('LOG_LOCATION')
 
+# --------------------------
+# Logging Setup
+# --------------------------
 class SafeConsoleHandler(logging.StreamHandler):
-    """Custom handler to safely handle console encoding"""
     def emit(self, record):
         try:
             msg = self.format(record)
-            stream = self.stream
-            stream.write(msg + self.terminator)
+            self.stream.write(msg + self.terminator)
             self.flush()
         except UnicodeEncodeError:
             clean_msg = msg.encode('ascii', 'ignore').decode('ascii')
-            stream.write(clean_msg + self.terminator)
+            self.stream.write(clean_msg + self.terminator)
             self.flush()
         except Exception:
             self.handleError(record)
 
 def is_log_file_exist():
     if not os.path.exists(LOG_LOCATION):
-        # File does not exist, create it
         try:
+            os.makedirs(os.path.dirname(LOG_LOCATION), exist_ok=True)
             with open(LOG_LOCATION, 'w', encoding='utf-8') as f:
-                # You can optionally write some initial content to the file here
-                f.write("Log file created.\n") # Example initial content
+                f.write("Log file created.\n")
             print(f"File '{LOG_LOCATION}' created successfully.")
         except IOError as e:
             print(f"Error creating file '{LOG_LOCATION}': {e}")
@@ -59,38 +73,21 @@ def is_log_file_exist():
 
 def configure_logging():
     is_log_file_exist()
-    """Set up logging with proper encoding handling"""
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-    # Define formatters FIRST, before handlers that use them
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
-    )
-    console_formatter = logging.Formatter(
-        '[%(levelname)s] %(message)s'
-    )
-    # File handler with UTF-8 encoding
-    file_handler = logging.FileHandler(
-        LOG_LOCATION,
-        mode='a',
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(file_formatter) # Assign file_formatter
-    # Safe console handler
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_formatter = logging.Formatter('[%(levelname)s] %(message)s')
+    file_handler = logging.FileHandler(LOG_LOCATION, mode='a', encoding='utf-8')
+    file_handler.setFormatter(file_formatter)
     console_handler = SafeConsoleHandler()
-    console_handler.setFormatter(console_formatter) # Assign console_formatter
+    console_handler.setFormatter(console_formatter)
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
 def rotate_log():
-    """Rotate log file to maintain only last 1000 lines"""
     logger = logging.getLogger()
     file_handler = None
-    # Define file_formatter here as well, to ensure it's accessible in this scope
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
-    )
-    # Find the file handler
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     for handler in logger.handlers:
         if isinstance(handler, logging.FileHandler):
             file_handler = handler
@@ -100,33 +97,75 @@ def rotate_log():
         return
     log_file = file_handler.baseFilename
     try:
-        # Close and remove current file handler
         file_handler.close()
         logger.removeHandler(file_handler)
-        # Read existing log content
         if os.path.exists(log_file):
             with open(log_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-            # Keep only last 1000 lines
             if len(lines) > 1000:
                 keep_lines = lines[-1000:]
                 with open(log_file, 'w', encoding='utf-8') as f:
                     f.writelines(keep_lines)
-        # Create new file handler
         new_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-        new_handler.setFormatter(file_formatter) # Assign file_formatter
+        new_handler.setFormatter(file_formatter)
         logger.addHandler(new_handler)
     except Exception as e:
         logging.error("Log rotation failed: %s", str(e))
     finally:
-        # Ensure we always have a file handler
         if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
             new_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-            new_handler.setFormatter(file_formatter) # Assign file_formatter
+            new_handler.setFormatter(file_formatter)
             logger.addHandler(new_handler)
 
+# --------------------------
+# Network Speed Measurement
+# --------------------------
+def measure_network_speed(test_url="https://www.google.com", timeout=10):
+    start_time = time.time()
+    total_bytes = 0
+    try:
+        r = requests.get(test_url, timeout=timeout, stream=True)
+        # Read 100KB of data for the test
+        for chunk in r.iter_content(chunk_size=1024):
+            total_bytes += len(chunk)
+            if total_bytes >= 100 * 1024:
+                break
+        elapsed = time.time() - start_time
+        if elapsed > 0:
+            speed_mbps = (total_bytes * 8) / (elapsed * 1e6)
+            logging.debug(f"Measured network speed: {speed_mbps:.2f} Mbps")
+            return speed_mbps
+    except Exception as e:
+        logging.warning(f"Network speed measurement failed: {e}")
+        return 0.5  # Fallback to very slow speed (0.5 Mbps)
+    return 0.5
+
+# --------------------------
+# Chunk Size Calculation
+# --------------------------
+def calculate_chunk_size(file_size):
+    network_speed = measure_network_speed()  # in Mbps
+    if network_speed < 0.1:
+        network_speed = 0.5
+    if file_size < 10 * 1024 * 1024:    # < 10MB
+        return None  # Direct upload
+    elif file_size < 128 * 1024 * 1024:  # < 128MB
+        if network_speed < 1:
+            return 1 * 1024 * 1024  # 1MB chunks for slow networks
+        else:
+            return 2 * 1024 * 1024  # 2MB chunks
+    else:
+        if network_speed < 1:
+            return 2 * 1024 * 1024  # 2MB chunks
+        elif network_speed < 5:
+            return 5 * 1024 * 1024  # 5MB chunks
+        else:
+            return 10 * 1024 * 1024  # 10MB chunks for fast networks
+
+# --------------------------
+# Drive Upload Functionality
+# --------------------------
 def authenticate():
-    """Authenticate using service account credentials"""
     try:
         creds = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -136,100 +175,99 @@ def authenticate():
         logging.error("Authentication failed: %s", str(e))
         raise
 
+def update_progress(current, total, file_name):
+    progress = (current / total) * 1000
+    logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
+
 def upload_file(file_path, service, max_retries=20):
-    """Upload file to Google Drive with retry logic"""
     file_name = os.path.basename(file_path)
-    logging.info("Starting upload process for: %s", file_name)
+    file_size = os.path.getsize(file_path)
+    chunk_size = calculate_chunk_size(file_size)
+    logging.info(f"Starting upload for {file_name} ({file_size} bytes) with chunk size: {chunk_size if chunk_size else 'Direct upload'}")
     file_metadata = {'name': file_name, 'parents': [PARENT_FOLDER_ID]}
-    media = MediaFileUpload(file_path, resumable=True)
+    media = MediaFileUpload(file_path, mimetype='application/octet-stream',
+                            resumable=bool(chunk_size), chunksize=chunk_size)
     for attempt in range(1, max_retries + 1):
         try:
-            logging.debug("Attempt %d/%d - %s", attempt, max_retries, file_name)
+            logging.debug(f"Attempt {attempt}/{max_retries} for {file_name}")
             request = service.files().create(
                 body=file_metadata,
                 media_body=media,
                 fields='id'
             )
-            file = request.execute()
-            if file_id := file.get('id'):
-                logging.info("Upload successful: %s (ID: %s)", file_name, file_id)
+            response = None
+            while response is None:
+                status, response = request.next_chunk() # timeout=300 # 5 minute timeout per chunk
+                if status:
+                    update_progress(status.resumable_progress, file_size, file_name)
+            if file_id := response.get('id'):
+                logging.info(f"Upload successful: {file_name} (ID: {file_id})")
                 return file_id
-            raise Exception("No file ID returned from API")
+            raise Exception("No file ID returned after chunk upload")
         except Exception as e:
             if attempt < max_retries:
                 wait_time = 2 ** attempt
-                logging.warning("Attempt %d failed for %s: %s. Retrying in %ds...",
-                                attempt, file_name, str(e), wait_time)
+                logging.warning(f"Attempt {attempt} failed for {file_name}: {e}. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
-                logging.error("Final attempt failed for %s: %s", file_name, str(e))
+                logging.error(f"Final attempt failed for {file_name}: {e}")
     return None
 
 def process_files():
-    """Process files with detailed tracking"""
-    logging.info("Starting new file processing job")
+    logging.info("Starting file processing job")
     start_time = time.time()
     stats = {'processed': 0, 'success': 0, 'failures': 0}
     try:
-        # Check for files first
         all_files = []
         for root, _, files in os.walk(LOCAL_FOLDER):
             all_files.extend([os.path.join(root, f) for f in files])
         if not all_files:
-            logging.info("No files found in %s, skipping processing", LOCAL_FOLDER)
+            logging.info(f"No files found in {LOCAL_FOLDER}.")
             return 0
-        logging.info("Found %d files in %s", len(all_files), LOCAL_FOLDER)
+        logging.info(f"Found {len(all_files)} files in {LOCAL_FOLDER}.")
         creds = authenticate()
         service = build('drive', 'v3', credentials=creds)
         for idx, file_path in enumerate(all_files, 1):
             stats['processed'] += 1
-            logging.info("Processing file %d/%d: %s",
-                         idx, len(all_files), os.path.basename(file_path))
-            if file_id := upload_file(file_path, service):
+            logging.info(f"Processing file {idx}/{len(all_files)}: {os.path.basename(file_path)}")
+            if upload_file(file_path, service):
                 try:
                     os.remove(file_path)
                     stats['success'] += 1
-                    logging.info("Successfully deleted %s", os.path.basename(file_path))
+                    logging.info(f"Deleted local file: {os.path.basename(file_path)}")
                 except Exception as e:
                     stats['failures'] += 1
-                    logging.error("Deletion failed for %s: %s",
-                                  os.path.basename(file_path), str(e))
+                    logging.error(f"Failed to delete {os.path.basename(file_path)}: {e}")
             else:
                 stats['failures'] += 1
-                logging.error("Upload failed for %s", os.path.basename(file_path))
+                logging.error(f"Upload failed for {os.path.basename(file_path)}")
     except Exception as e:
-        logging.error("Critical error: %s", str(e))
+        logging.error(f"Critical error during file processing: {e}")
     finally:
         duration = time.time() - start_time
-        logging.info(
-            "Job completed in %.2f seconds\n"
-            "Processed: %d | Success: %d | Failures: %d",
-            duration, stats['processed'], stats['success'], stats['failures']
-        )
+        logging.info(f"Job completed in {duration:.2f} seconds. Processed: {stats['processed']} | Success: {stats['success']} | Failures: {stats['failures']}")
         rotate_log()
+        return stats['processed']
 
+# --------------------------
+# Main Scheduler
+# --------------------------
 def main():
-    """Main scheduler with safe logging"""
     configure_logging()
-    job_interval = 1800  # seconds
-    schedule.every(job_interval).seconds.do(process_files)
-    logging.info("Scheduled job configured to run every %d seconds", job_interval)
-    logging.info("Starting scheduler")
+    job_interval = 1800  # Run job every 1800 seconds (30 minutes)
+    logging.info(f"Scheduled job configured to run every {job_interval} seconds.")
+
+    # Use a scheduler loop to check for files and process them periodically.
     while True:
         try:
-            if process_files() != 0:
-                is_log_file_exist()
-                pending = schedule.get_jobs()
-                logging.debug("Pending jobs check: %d jobs in queue", len(pending))
-                schedule.run_pending()
-            else:
-                logging.info("file not found")
+            files_processed = process_files()
+            if files_processed == 0:
+                logging.info("No files to process. Exiting scheduler loop.")
                 break
         except Exception as e:
-            logging.error("Scheduler error: %s", str(e))
-        sleep_time = 30
-        is_log_file_exist()
-        logging.debug("Sleeping for %d seconds", sleep_time)
+            logging.error(f"Scheduler error: {e}")
+        sleep_time = 30  # Sleep 30 seconds between checks
+        logging.debug(f"Sleeping for {sleep_time} seconds before next check.")
         time.sleep(sleep_time)
 
 if __name__ == '__main__':

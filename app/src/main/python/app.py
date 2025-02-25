@@ -148,7 +148,7 @@ def calculate_chunk_size(file_size):
     if network_speed < 0.1:
         network_speed = 0.5
     if file_size < 10 * 1024 * 1024:    # < 10MB
-        return None  # Direct upload
+        return 100 * 1024 * 1024  # Return a large chunk size (100MB) instead of None - EFFECTIVELY DIRECT UPLOAD
     elif file_size < 128 * 1024 * 1024:  # < 128MB
         if network_speed < 1:
             return 1 * 1024 * 1024  # 1MB chunks for slow networks
@@ -161,7 +161,6 @@ def calculate_chunk_size(file_size):
             return 5 * 1024 * 1024  # 5MB chunks
         else:
             return 10 * 1024 * 1024  # 10MB chunks for fast networks
-
 # --------------------------
 # Drive Upload Functionality
 # --------------------------
@@ -177,7 +176,10 @@ def authenticate():
 
 def update_progress(current, total, file_name):
     progress = (current / total) * 100
-    logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
+    # logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
+    # logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
+    progress_rounded = round(progress)  # Round to the nearest whole number
+    logging.info(f"Uploading {file_name}: {progress_rounded}% complete") # Use the rounded value
 
 def upload_file(file_path, service, max_retries=20):
     file_name = os.path.basename(file_path)
@@ -254,7 +256,7 @@ def process_files():
 # --------------------------
 def main():
     configure_logging()
-    job_interval = 1800  # Run job every 1800 seconds (30 minutes)
+    job_interval = 2400  # Run job every 2400 seconds (40 minutes)
     logging.info(f"Scheduled job configured to run every {job_interval} seconds.")
 
     # Use a scheduler loop to check for files and process them periodically.
@@ -266,7 +268,7 @@ def main():
                 break
         except Exception as e:
             logging.error(f"Scheduler error: {e}")
-        sleep_time = 30  # Sleep 30 seconds between checks
+        sleep_time = 20  # Sleep 30 seconds between checks
         logging.debug(f"Sleeping for {sleep_time} seconds before next check.")
         time.sleep(sleep_time)
 

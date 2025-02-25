@@ -12,10 +12,18 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 public class FilePermissionHelper {
-//
-    private static final int STORAGE_PERMISSION_CODE = 100;
-    private static final int MANAGE_STORAGE_CODE = 101;
+    //
+    public static final int STORAGE_PERMISSION_CODE = 100;
+    public static final int MANAGE_STORAGE_CODE = 101;
     private final Activity activity;
+
+    public boolean hasAllPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        } else {
+            return hasReadWritePermissions();
+        }
+    }
 
     public FilePermissionHelper(Activity activity) {
         this.activity = activity;
@@ -37,7 +45,7 @@ public class FilePermissionHelper {
     }
 
     // Check if we have basic read/write permissions
-    private boolean hasReadWritePermissions() {
+    public boolean hasReadWritePermissions() {
         return ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
                 ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
     }
