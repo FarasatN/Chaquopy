@@ -46,6 +46,8 @@
                 \n\nThe default local folder is located in here that will be upload inside of it
                 \nto drive and then delete from device: '/storage/emulated/0/Ringtones/'
                 \n\n* The log file will also be located in this address:
-                \n'/storage/emulated/0/Download/automate/upload_log.txt'"
+                \n'/storage/emulated/0/Download/automate/upload_log.txt'
+                \n
+                \n** After modifying config.json variables, please, clear all app data!"
             android:textColor="#009688"/>
 </LinearLayout>

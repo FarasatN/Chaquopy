@@ -1,7 +1,6 @@
 package com.example.chaquopy;
 
 import android.annotation.SuppressLint;
-import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -10,12 +9,15 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,27 +36,34 @@ import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity { // Removed "implements ConnectivityChanger.ConnectivityChangeListener"
     public FilePermissionHelper permissionHelper;
     private static final String TAG = "Auto Upload";
-    private static final String WORKER_TAG = "DriveSyncWorker"; // Consistent WORKER_TAG
     private static final String channelId = "i.apps.notifications"; // Unique channel ID for notifications
-    private final String description = "Auto Upload notification";  // Description for the notification channel
+    private static final String description = "Auto Upload notification";  // Description for the notification channel
     private static final int notificationId = 1234; // Unique identifier for the notification
-    private final int scheduleInterval = 15; // Interval in minutes
+    private static int scheduleIntervalInMinutes = 240;
+    private static int setInitialDelayInSeconds = 10; //initial delay when work manager started
 
     public static boolean isWifiConnected(@NonNull Context context) { // Made static and public
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return false;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
-            return capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
-        } else { // Below Android M
-            NetworkInfo activeNetworkInfo = cm.getActiveNetworkInfo();
-            return activeNetworkInfo != null && activeNetworkInfo.getType() == ConnectivityManager.TYPE_WIFI && activeNetworkInfo.isConnected();
-        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        return capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+//        } else { // Below Android M
+//            NetworkInfo activeNetworkInfo = cm.getActiveNetworkInfo();
+//            return activeNetworkInfo != null && activeNetworkInfo.getType() == ConnectivityManager.TYPE_WIFI && activeNetworkInfo.isConnected();
+//        }
+
     }
 
 //    public void restartApp() {
@@ -85,17 +94,59 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
 //        // Network check and scheduling
 //        if (isWifiConnected(this)) {
 //            sendNotification(this, "WIFI connected, upload processing..");
-//            Log.v(WORKER_TAG, "WIFI connected, upload processing..");
-//            System.out.println("WIFI connected, upload processing..");
+//            Log.v(TAG, "WIFI connected, upload processing..");
+//            //System.out.println("WIFI connected, upload processing..");
 //            schedulePeriodicWork();
 //            Log.v(TAG, "Periodic task scheduled");
-//            System.out.println("Periodic task scheduled");
+//            //System.out.println("Periodic task scheduled");
 //        } else {
 //            sendNotification(this, "WIFI disconnected, upload stopped!");
-//            Log.v(WORKER_TAG, "WIFI disconnected, upload stopped!");
-//            System.out.println("WIFI disconnected, upload stopped!");
+//            Log.v(TAG, "WIFI disconnected, upload stopped!");
+//            //System.out.println("WIFI disconnected, upload stopped!");
 //        }
 //    }
+
+    private boolean loadConfigFromJson() {
+        File configFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "/automate/config.json");
+        File serviceAcoountFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "/automate/service_account.json");
+        StringBuilder jsonContent = new StringBuilder();
+
+        if (!serviceAcoountFile.exists()) {
+            Log.e(TAG, "'service_account.json' file not found! ");
+            Toast.makeText(getApplicationContext(), "'service_account.json' file not found! ", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        try (BufferedReader br = new BufferedReader(new FileReader(configFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                jsonContent.append(line);
+            }
+            JSONObject configJson = new JSONObject(jsonContent.toString());
+            if (configJson.has("scheduleIntervalInMinutes") && configJson.has("setInitialDelayInSeconds")) {
+                scheduleIntervalInMinutes = configJson.getInt("scheduleIntervalInMinutes");
+                setInitialDelayInSeconds = configJson.getInt("setInitialDelayInSeconds");
+                Log.w(TAG, "scheduleIntervalInMinutes loaded from config.json: " + scheduleIntervalInMinutes + " minutes");
+                Log.w(TAG, "setInitialDelayInSeconds loaded from config.json: " + setInitialDelayInSeconds + " seconds");
+            } else {
+                Log.w(TAG, "scheduleIntervalInMinutes key not found in config.json, using default: " + scheduleIntervalInMinutes + " minutes");
+                Log.w(TAG, "setInitialDelayInSeconds key not found in config.json, using default: " + setInitialDelayInSeconds + " seconds");
+            }
+
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading config.json: " + e.getMessage());
+            Log.e(TAG, "Using default scheduleIntervalInMinutes: " + scheduleIntervalInMinutes + " minutes");
+            Log.e(TAG, "Using default setInitialDelayInSeconds: " + setInitialDelayInSeconds + " seconds");
+            Toast.makeText(getApplicationContext(), "Error reading config.json: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return false;
+        } catch (org.json.JSONException e) {
+            Log.e(TAG, "Error parsing config.json: " + e.getMessage());
+            Toast.makeText(getApplicationContext(), "Error parsing config.json: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,9 +157,11 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
         setContentView(R.layout.activity_main);
 
         permissionHelper = new FilePermissionHelper(this);
+
         permissionHelper.requestDownloadFolderAccess();
         // Check permissions immediately in case already granted
         if (permissionHelper.hasAllPermissions()) {
+
             startAppProcess();
         }
     }
@@ -124,6 +177,7 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
             }
         }
     }
+
     private void startAppProcess() {
         // Check notifications
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
@@ -132,25 +186,50 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
         createNotificationChannel();
 //        restartApp();
         // Network check and scheduling
-        if (isWifiConnected(this)) {
-            sendNotification(this, "WIFI connected, upload processing..");
-            Log.v(WORKER_TAG, "WIFI connected, upload processing..");
-            System.out.println("WIFI connected, upload processing..");
+//        if (isWifiConnected(this)) {
+//            sendNotification(this, "WIFI connected, upload processing..");
+//            Log.v(TAG, "WIFI connected, upload processing..");
+//            //System.out.println("WIFI connected, upload processing..");
+//            Log.v(TAG, "Periodic task scheduled");
+//            //System.out.println("Periodic task scheduled");
+//        } else {
+//            sendNotification(this, "WIFI disconnected, upload stopped!");
+//            Log.v(TAG, "WIFI disconnected, upload stopped!");
+//            //System.out.println("WIFI disconnected, upload stopped!");
+//        }
+
+        boolean isConfigFileExists = loadConfigFromJson(); // Load scheduleInterval from JSON
+        Log.v(TAG, "scheduleIntervalInMinutes : " + scheduleIntervalInMinutes);
+        Log.v(TAG, "setInitialDelayInSeconds : " + setInitialDelayInSeconds);
+
+        if (isConfigFileExists) {
             schedulePeriodicWork();
-            Log.v(TAG, "Periodic task scheduled");
-            System.out.println("Periodic task scheduled");
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    // Code to be executed after the delay (1 second) goes here
+                    // Example:
+                    // Toast.makeText(MainActivity.this, "Delay finished!", Toast.LENGTH_SHORT).show();
+                    // Or perform some UI update
+                    Toast.makeText(getApplicationContext(), "App scheduled in every " + scheduleIntervalInMinutes + " minutes with " + setInitialDelayInSeconds + " seconds initial delay!", Toast.LENGTH_LONG).show();
+                    Log.v(TAG, "App scheduled in every " + scheduleIntervalInMinutes + " minutes with " + setInitialDelayInSeconds + " seconds initial delay!");
+
+                }
+            }, 5000); // Delay in milliseconds (1 second)
+
         } else {
-            sendNotification(this, "WIFI disconnected, upload stopped!");
-            Log.v(WORKER_TAG, "WIFI disconnected, upload stopped!");
-            System.out.println("WIFI disconnected, upload stopped!");
+//            finish();
+            this.finishAffinity();
         }
+
     }
 
     private void schedulePeriodicWork() {
+
         PeriodicWorkRequest driveSyncWorkRequest =
-                new PeriodicWorkRequest.Builder(DriveSyncWorker.class, scheduleInterval, TimeUnit.MINUTES)
+                new PeriodicWorkRequest.Builder(DriveSyncWorker.class, scheduleIntervalInMinutes, TimeUnit.MINUTES)
                         .setConstraints(Constraints.NONE) // You can add constraints if needed (e.g., network type, charging)
-                        .setInitialDelay(5, TimeUnit.SECONDS)
+                        .setInitialDelay(setInitialDelayInSeconds, TimeUnit.SECONDS)
                         .build();
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "DriveSyncWorker", // Unique name for the periodic work
@@ -163,32 +242,46 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
     public static class DriveSyncWorker extends Worker {
         public DriveSyncWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
             super(context, workerParams);
+
         }
+
         @NonNull
         @Override
         public Result doWork() {
-            if (isWifiConnected(this.getApplicationContext())) {
-                // --- Notification and Logging for Wi-Fi connected ---
-                sendNotification(this.getApplicationContext(),"WIFI connected, upload processing..");
-                Log.v(WORKER_TAG, "WIFI connected, upload processing..");
-                System.out.println("WIFI connected, upload processing..");
+            try {
+                if (isWifiConnected(this.getApplicationContext())) {
 
-                Log.v(WORKER_TAG, "WorkManager - Connected via Wi-Fi - Executing Python Code");
-                System.out.println("WorkManager - Connected via Wi-Fi - Executing Python Code");
-                executePythonMain();
-                return Result.success();
-            } else {
-                // --- Notification and Logging for No Wi-Fi ---
-                sendNotification(this.getApplicationContext(),"WIFI disconnected, upload stopped!"); // Optional notification for Wi-Fi disconnect from worker
-                Log.v(WORKER_TAG, "WIFI disconnected, upload stopped!");
-                System.out.println("WIFI disconnected, upload stopped!");
+                    // --- Notification and Logging for Wi-Fi connected ---
+                    sendNotification(this.getApplicationContext(), "WIFI connected, upload processing..");
+                    Log.v(TAG, "WIFI connected, upload processing..");
+                    //System.out.println("WIFI connected, upload processing..");
 
-                Log.v(WORKER_TAG, "WorkManager - Not Wi-Fi - Skipping Python execution");
-                System.out.println("WorkManager - Not Wi-Fi - Skipping Python execution");
-                return Result.success(); // Indicate success - worker ran, network checked, Python skipped (not a failure)
+                    executePythonMain();
+
+                    sendNotification(this.getApplicationContext(), "Upload finished! Please, check the log file for details!");
+                    Log.v(TAG, "Upload finished! Please, check the log file for details!");
+                    //System.out.println("Upload finished! Please, check the log file for details!");
+
+                    return Result.success();
+
+                } else {
+                    // --- Notification and Logging for No Wi-Fi ---
+                    sendNotification(this.getApplicationContext(), "WIFI disconnected, upload stopped!"); // Optional notification for Wi-Fi disconnect from worker
+                    Log.v(TAG, "WIFI disconnected, upload stopped!");
+                    //System.out.println("WIFI disconnected, upload stopped!");
+                    return Result.failure(); // Indicate failure if Work Manager fails
+                }
+            } catch (Exception e) {
+                Log.v(TAG, "App encountered an error during execution process: ", e);
+                sendNotification(this.getApplicationContext(), "App encountered an error during execution process: " + e.getMessage());
+                return Result.failure(); // Indicate failure if Work Manager fails
             }
+
         }
-        private Result executePythonMain() {
+
+        private void
+            //Result
+        executePythonMain() {
             if (!Python.isStarted()) {
                 Python.start(new AndroidPlatform(this.getApplicationContext()));
             }
@@ -196,18 +289,15 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
                 Python py = Python.getInstance();
                 PyObject myModule = py.getModule("app");
                 myModule.callAttr("main"); // Call the main function in your Python script
-                Log.v(WORKER_TAG, "WorkManager - Python main function executed successfully");
-                sendNotification(this.getApplicationContext(),"upload finished, for detail check out log file!");
-                return Result.success();
+                Log.v(TAG, "WorkManager - Python main function executed successfully");
             } catch (Exception e) {
-                Log.v(WORKER_TAG, "WorkManager - Error executing Python main function: ", e);
-                sendNotification(this.getApplicationContext(), "WorkManager encountered an error during Python execution: " + e.getMessage());
-                return Result.failure(); // Indicate failure if Python execution fails
+                Log.v(TAG, "Python execution error: ", e);
             }
         }
 
     }
 //----------------------------------------------------------------------------------------------------------------------
+
     /**
      * Build and send a notification with a custom layout and action.
      */
@@ -221,6 +311,7 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
         );
         // Build the notification
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
+//                .setSmallIcon(R.drawable.baseline_notification_important_24) // Notification icon
                 .setSmallIcon(R.drawable.baseline_notification_important_24) // Notification icon
                 .setContentTitle("Auto Upload") // Title displayed in the notification
                 .setContentText(message) // Text displayed in the notification
@@ -245,6 +336,7 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
             }
         }
     }
+
     /**
      * Create a notification channel for devices running Android 8.0 or higher.
      * A channel groups notifications with similar behavior.
@@ -257,22 +349,28 @@ public class MainActivity extends AppCompatActivity { // Removed "implements Con
                     NotificationManager.IMPORTANCE_HIGH
             );
             notificationChannel.enableLights(true); // Turn on notification light
-            notificationChannel.setLightColor(Color.YELLOW);
+            notificationChannel.setLightColor(Color.GREEN);
             notificationChannel.enableVibration(true); // Allow vibration for notifications
+            // Optional: Customize vibration pattern
+//            long[] vibrationPattern = {0, 100, 200, 300}; // Example: off 0ms, on 100ms, off 200ms, on 300ms
+//            notificationChannel.setVibrationPattern(vibrationPattern);
             NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(notificationChannel);
             }
         }
     }
+
     /**
      * Checks whether notifications are enabled for the app.
+     *
      * @param context Application or activity context.
      * @return true if notifications are enabled, false otherwise.
      */
     public static boolean areNotificationsEnabled(Context context) {
         return NotificationManagerCompat.from(context).areNotificationsEnabled();
     }
+
     /**
      * Prompts the user to enable notifications if they are disabled.
      * Opens the notification settings for this app.

@@ -2,8 +2,6 @@ import os
 import time
 import json
 import logging
-import hashlib
-import threading
 import requests  # For network speed measurement
 import tracemalloc
 from google.oauth2 import service_account
@@ -37,11 +35,35 @@ class ConfigManager:
         return self._config.get(key, default)
 
 config = ConfigManager()
+
 SCOPES = config.get('SCOPES')
+
 SERVICE_ACCOUNT_FILE = config.get('SERVICE_ACCOUNT_FILE')
+
 PARENT_FOLDER_ID = config.get('PARENT_FOLDER_ID')
+
 LOCAL_FOLDER = config.get('LOCAL_FOLDER')
+
 LOG_LOCATION = config.get('LOG_LOCATION')
+
+KEEP_LOG_LINE_COUNT = 1000
+KEEP_LOG_LINE_COUNT = config.get('KEEP_LOG_LINE_COUNT')
+
+DEFAULT_CHUNK_SIZE_FOR_MEASURING_NETWORK_SPEED = 1024
+DEFAULT_CHUNK_SIZE_FOR_MEASURING_NETWORK_SPEED = config.get('DEFAULT_CHUNK_SIZE_FOR_MEASURING_NETWORK_SPEED')
+
+DEFAULT_TIMEOUT_FOR_MEASURING_NETWORK_SPEED = 10
+DEFAULT_TIMEOUT_FOR_MEASURING_NETWORK_SPEED = config.get('DEFAULT_TIMEOUT_FOR_MEASURING_NETWORK_SPEED')
+
+UPLOAD_PROGRESS_PERCENTAGE = 1
+UPLOAD_PROGRESS_PERCENTAGE = config.get('UPLOAD_PROGRESS_PERCENTAGE')
+
+MAX_RETRIES = 20
+MAX_RETRIES = config.get('MAX_RETRIES')
+
+SLEEP_TIME = 20
+SLEEP_TIME = config.get('SLEEP_TIME')
+
 
 # --------------------------
 # Logging Setup
@@ -102,8 +124,8 @@ def rotate_log():
         if os.path.exists(log_file):
             with open(log_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-            if len(lines) > 1000:
-                keep_lines = lines[-1000:]
+            if len(lines) > KEEP_LOG_LINE_COUNT:
+                keep_lines = lines[-KEEP_LOG_LINE_COUNT:]
                 with open(log_file, 'w', encoding='utf-8') as f:
                     f.writelines(keep_lines)
         new_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
@@ -120,13 +142,13 @@ def rotate_log():
 # --------------------------
 # Network Speed Measurement
 # --------------------------
-def measure_network_speed(test_url="https://www.google.com", timeout=10):
+def measure_network_speed(test_url="https://www.google.com", timeout=DEFAULT_TIMEOUT_FOR_MEASURING_NETWORK_SPEED):
     start_time = time.time()
     total_bytes = 0
     try:
         r = requests.get(test_url, timeout=timeout, stream=True)
         # Read 100KB of data for the test
-        for chunk in r.iter_content(chunk_size=1024):
+        for chunk in r.iter_content(chunk_size=DEFAULT_CHUNK_SIZE_FOR_MEASURING_NETWORK_SPEED):
             total_bytes += len(chunk)
             if total_bytes >= 100 * 1024:
                 break
@@ -175,13 +197,13 @@ def authenticate():
         raise
 
 def update_progress(current, total, file_name):
-    progress = (current / total) * 100
+    progress = (current / total) * 100 * UPLOAD_PROGRESS_PERCENTAGE
     # logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
     # logging.info(f"Uploading {file_name}: {progress:.1f}% complete")
     progress_rounded = round(progress)  # Round to the nearest whole number
     logging.info(f"Uploading {file_name}: {progress_rounded}% complete") # Use the rounded value
 
-def upload_file(file_path, service, max_retries=20):
+def upload_file(file_path, service, max_retries=MAX_RETRIES):
     file_name = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
     chunk_size = calculate_chunk_size(file_size)
@@ -256,21 +278,17 @@ def process_files():
 # --------------------------
 def main():
     configure_logging()
-    job_interval = 2400  # Run job every 2400 seconds (40 minutes)
-    logging.info(f"Scheduled job configured to run every {job_interval} seconds.")
-
-    # Use a scheduler loop to check for files and process them periodically.
     while True:
         try:
             files_processed = process_files()
             if files_processed == 0:
-                logging.info("No files to process. Exiting scheduler loop.")
+                logging.info("No files to process. Exiting ..")
                 break
         except Exception as e:
-            logging.error(f"Scheduler error: {e}")
-        sleep_time = 20  # Sleep 30 seconds between checks
-        logging.debug(f"Sleeping for {sleep_time} seconds before next check.")
-        time.sleep(sleep_time)
+            logging.error(f"Error: {e}")
+        # Sleep default 20 seconds between checks
+        logging.debug(f"Sleeping for {SLEEP_TIME} seconds before next check.")
+        time.sleep(SLEEP_TIME)
 
 if __name__ == '__main__':
     main()
